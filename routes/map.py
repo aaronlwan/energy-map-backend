@@ -4,11 +4,19 @@ import geojson
 import geopandas
 from flask import request
 import jsonify
+import requests
 
 def mapRoutes(app):
     @app.route('/citytolatlon')
     def cityToLatLon():
-        return "hello"
+        args = request.args
+        city = args.city
+        stateCode = args.stateCode
+        country = args.country
+        params = {'q': city + ',' + stateCode + ',' + country, 'appid':'d7ecdfafc6f8d7054f83336651abe8fc'}
+        response = requests.get(url='http://api.openweathermap.org/geo/1.0/direct', params=params)
+        (lat, lon) = response.lat, response.lon
+        return (lat, lon)
     def LatLontoMap():
         args = request.args
         lat = args.get("lat")
