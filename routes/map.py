@@ -74,16 +74,18 @@ def mapRoutes(app):
                     else: 
                         per_foot = 35500
 
-            energy = per_foot * row['geometry'].area * 10.7639 #m^2 to ft^2
+                energy = per_foot * row['geometry'].area * 10.7639 #m^2 to ft^2
 
-            stories = row['building:levels']
-            if stories > 5: energy *= 201 / 114
-            elif stories > 1: energy *= 1.024 ** stories
-            btu_per_year = 616547362576.184
+                stories = row['building:levels']
+                if stories > 5: energy *= 201 / 114
+                elif stories > 1: energy *= 1.024 ** stories
+                btu_per_year += energy
+                
             btu_per_hour = btu_per_year / 8760
             watts = btu_per_hour * 3.41214e+3
             kilowatts = watts / 1000
             kwh_per_year = kilowatts * 8760
+            print(kwh_per_year)
             return kwh_per_year
 
 
