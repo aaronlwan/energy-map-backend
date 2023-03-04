@@ -10,13 +10,14 @@ def mapRoutes(app):
     @app.route('/citytolatlon')
     def cityToLatLon():
         args = request.args
-        city = args.city
-        stateCode = args.stateCode
-        country = args.country
+        city = args.get("city")
+        stateCode = args.get("stateCode")
+        country = args.get("country")
         params = {'q': city + ',' + stateCode + ',' + country, 'appid':'d7ecdfafc6f8d7054f83336651abe8fc'}
         response = requests.get(url='http://api.openweathermap.org/geo/1.0/direct', params=params)
-        (lat, lon) = response.lat, response.lon
-        return (lat, lon)
+        data = response.json()
+        (lat, lon) = data[0]["lat"], data[0]["lon"]
+        return 
     @app.route('/latlontomap')
     def LatLontoMap():
         args = request.args
