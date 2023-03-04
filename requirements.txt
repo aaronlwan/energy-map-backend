@@ -3,4 +3,5 @@ osmnx
 folium
 geojson
 pandas
-numpys
+numpy
+jsonify
