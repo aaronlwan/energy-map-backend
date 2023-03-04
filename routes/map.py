@@ -17,6 +17,5 @@ def mapRoutes(app):
         m = folium.Map(list(loc), zoom_start=17)
         geometries = osmnx.geometries.geometries_from_point(loc, tags={"building": True}, dist=1000)
         folium.GeoJson(data=geometries['geometry']).add_to(m)
-        m.save("map.html")
-
-        return jsonify({'status': 'success', 'message': 'Map generated successfully!'})
+        map_file = m.save("map.html")
+        return map_file
