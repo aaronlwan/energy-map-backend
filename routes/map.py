@@ -12,11 +12,12 @@ def mapRoutes(app):
     @app.route('/latlontomap')
     def LatLontoMap():
         args = request.args
-        lat = float(args.get("lat"))
+        lat = args.get("lat")
         lon = float(args.get("lon"))
         loc = (lat, lon)
         m = folium.Map(list(loc), zoom_start=17)
         geometries = osmnx.geometries.geometries_from_point(loc, tags={"building": True}, dist=1000)
+        osmnx.geometries.geometries_from_place(lat, tags={"building": True}, dist=1000)
         folium.GeoJson(data=geometries['geometry']).add_to(m)
         map_file = m._repr_html_()
         return map_file
