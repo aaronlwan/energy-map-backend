@@ -5,9 +5,11 @@ import geopandas
 from flask import request, jsonify
 import requests
 import pandas as pd
+from flask_cors import CORS, cross_origin
 
 def mapRoutes(app):
     @app.route('/citytolatlon')
+    @cross_origin()
     def cityToLatLon():
         args = request.args
         city = args.get("city")
@@ -20,6 +22,7 @@ def mapRoutes(app):
         result = jsonify({"lat": lat, "lon": lon})
         return result
     @app.route('/latlontomap')
+    @cross_origin()
     def LatLontoMap():
         args = request.args
         lat = float(args.get("lat"))
