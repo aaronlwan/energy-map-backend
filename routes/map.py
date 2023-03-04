@@ -2,8 +2,7 @@ import folium
 import osmnx
 import geojson
 import geopandas
-from flask import request
-import jsonify
+from flask import request, jsonify
 import requests
 
 def mapRoutes(app):
@@ -16,8 +15,9 @@ def mapRoutes(app):
         params = {'q': city + ',' + stateCode + ',' + country, 'appid':'d7ecdfafc6f8d7054f83336651abe8fc'}
         response = requests.get(url='http://api.openweathermap.org/geo/1.0/direct', params=params)
         data = response.json()
-        (lat, lon) = data[0]["lat"], data[0]["lon"]
-        return 
+        lat, lon = data[0]["lat"], data[0]["lon"]
+        result = jsonify({"lat": lat, "lon": lon})
+        return result
     @app.route('/latlontomap')
     def LatLontoMap():
         args = request.args
