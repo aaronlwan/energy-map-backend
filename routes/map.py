@@ -17,13 +17,15 @@ def mapRoutes(app):
         response = requests.get(url='http://api.openweathermap.org/geo/1.0/direct', params=params)
         (lat, lon) = response.lat, response.lon
         return (lat, lon)
+    @app.route('/latlontomap')
     def LatLontoMap():
         args = request.args
         lat = args.get("lat")
-        lon = args.get("lon")
+        lon = float(args.get("lon"))
         loc = (lat, lon)
         m = folium.Map(list(loc), zoom_start=17)
         geometries = osmnx.geometries.geometries_from_point(loc, tags={"building": True}, dist=1000)
+        osmnx.geometries.geometries_from_place(lat, tags={"building": True}, dist=1000)
         folium.GeoJson(data=geometries['geometry']).add_to(m)
-        map_file = m.save("map.html")
+        map_file = m._repr_html_()
         return map_file
