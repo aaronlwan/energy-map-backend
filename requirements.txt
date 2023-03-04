@@ -5,3 +5,5 @@ geojson
 pandas
 numpy
 jsonify
+flask_cors
+flask
