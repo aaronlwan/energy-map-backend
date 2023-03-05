@@ -34,6 +34,8 @@ def mapRoutes(app):
         lat = float(args.get("lat"))
         lon = float(args.get("lon"))
         r = int(args.get("r"))
+        city = args.get("city")
+        state = args.get("state")
 
         def solrad(lat, lon):
             url = "https://developer.nrel.gov/api/pvwatts/v8.json"
@@ -68,17 +70,12 @@ def mapRoutes(app):
             #geometries['building:levels'] = geometries['building:levels'].fillna(0).astype('int') #removing nans
             geometries["building:levels"] = pd.to_numeric(geometries["building:levels"], errors="coerce").dropna().astype("int")
             geometries['addr:postcode'] = pd.to_numeric(geometries['addr:postcode'].str[:5], errors="coerce").dropna().astype("int")
-            kw = 0
-            sunroof = pd.read_csv('project-sunroof-postal_code.csv').set_index('zip')
-            L = geometries['addr:postcode'].value_counts()
-            for i in range(len(L)):
-                zip_code, count = int(L.keys()[i]), L.values[i]
-                try:
-                    area = sunroof.loc[zip_code]
-                    kw += area['kw_total'] * count / area['qualified']
-                except:
-                    pass
-            rooftop_kwh = kw * 8760 #kw to kwh/yr
+            # sunroof = pd.read_csv('project-sunroof-postal_code.csv').set_index('zip')
+            sunroof = pd.read_csv('project-sunroof-city.csv')
+            states = pd.read_csv('states.csv')
+            fullName = states[states.code==state].iloc[0,0]
+            row = sunroof[(sunroof["region_name"]==city) & (sunroof["state_name"]==fullName)].iloc[0]
+            count_qualified, total_kwh_potential, existing_installs, median_kwh_potential = row["count_qualified"], row["kw_total"] * 8760, row["existing_installs_count"], row["kw_median"] * 8760
 
             btu_per_year = 0
             for i, row in geometries.iterrows():
@@ -104,7 +101,7 @@ def mapRoutes(app):
             kwh_per_year = kilowatts * 8760
             kwh_per_year
 
-            return (kwh_per_year, rooftop_kwh, len(geometries))
+            return (kwh_per_year, count_qualified, total_kwh_potential, existing_installs, median_kwh_potential, len(geometries))
 
 
         def get_map(lat, lon, r, demand):
@@ -181,7 +178,7 @@ def mapRoutes(app):
                 df.loc[i, "power_dist"] = best
             return df
 
-        demand, existing_production, number_buildings = get_demand(lat, lon, r)
+        demand, count_qualified, total_kwh_potential, existing_installs, median_kwh_potential, number_buildings = get_demand(lat, lon, r)
         map, potential_production, categories, df = get_map(lat, lon, r, demand)
         distance_df = calc_power_dist(df, lat, lon, r)
         distance_df['Area'] = distance_df['geometry'].to_crs("EPSG:3857").area
@@ -189,7 +186,7 @@ def mapRoutes(app):
         for i in range(int(len(distance_df) * 0.10)):
             best_lat, best_lon = distance_df.iloc[i]["centroid"].y, distance_df.iloc[i]["centroid"].x
             folium.Marker( location=[best_lat, best_lon], fill_color='#43d9de', radius=8).add_to(map)
-        data = {"map_html": map._repr_html_(), "demand": demand, "existing_production": existing_production, 
+        data = {"map_html": map._repr_html_(), "demand": demand, "existing_installs": existing_installs, "count_qualified": count_qualified, "total_kwh_potential": total_kwh_potential, "median_kwh_potential": median_kwh_potential,
                 "number_buildings": number_buildings, "potential_production": potential_production, "categories": categories.to_json()}
         json_data = jsonify(**data)
         print(json_data)
