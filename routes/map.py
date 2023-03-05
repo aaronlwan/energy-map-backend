@@ -162,7 +162,8 @@ def mapRoutes(app):
                 attr = 'Esri', name = 'Esri Satellite', overlay = False, control = True).add_to(m)
             #html, total production, categories
             #return (m._repr_html_(), panels["Production"].sum(), geometries["building"].value_counts(), geometries)
-            return (m, panels["Production"].sum(), geometries["building"].value_counts(), geometries)
+            #return (m, panels["Production"].sum(), geometries["building"].value_counts(), geometries)
+            return (m, panels["Production"].sum(), len(geometries["geometry"]), geometries)
         
         def calc_power_dist(df, lat, lon, r):
             loc = (lat, lon)
@@ -182,15 +183,17 @@ def mapRoutes(app):
             return df
 
         demand, existing_production, number_buildings = get_demand(lat, lon, r)
-        map, potential_production, categories, df = get_map(lat, lon, r, demand)
+        map, potential_production, number_sites, df = get_map(lat, lon, r, demand)
         distance_df = calc_power_dist(df, lat, lon, r)
         distance_df['Area'] = distance_df['geometry'].to_crs("EPSG:3857").area
         distance_df.sort_values(["Area", "power_dist"], ascending=[False, True])
         for i in range(int(len(distance_df) * 0.10)):
             best_lat, best_lon = distance_df.iloc[i]["centroid"].y, distance_df.iloc[i]["centroid"].x
             folium.Marker( location=[best_lat, best_lon], fill_color='#43d9de', radius=8).add_to(map)
+        #data = {"map_html": map._repr_html_(), "demand": demand, "existing_production": existing_production, 
+                #"number_buildings": number_buildings, "potential_production": potential_production, "categories": categories.to_json()}
         data = {"map_html": map._repr_html_(), "demand": demand, "existing_production": existing_production, 
-                "number_buildings": number_buildings, "potential_production": potential_production, "categories": categories.to_json()}
+                "number_buildings": number_buildings, "potential_production": potential_production, "number_sites": number_sites}
         json_data = jsonify(**data)
         print(json_data)
         return json_data
