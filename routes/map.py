@@ -46,34 +46,39 @@ def mapRoutes(app):
         
         def get_demand(lat, lon, r):
             loc = (lat, lon)
-            print(loc)
-            #m = folium.Map(list(loc), zoom_start=17)
             geometries = ox.geometries.geometries_from_point(loc, tags={"building": True}, dist=r)
-            #folium.GeoJson(data=geometries['geometry']).add_to(m)
-            if "addr:postcode" not in geometries.columns:
-                return 0
-            #making mapping of zip codes to population density
+            if "addr:postcode" not in geometries.columns: return (0, 0, 0)
+
+            #map zip codes to pop density
             zip_density = pd.read_csv('zip_population.csv').set_index('ZIP')
             zip_density['urban'] = zip_density['pop_density'] >= 1000
             zip_density.to_csv('zip_population.csv')
                 
             #default urban/rural truth value
             default = zip_density.loc[int(geometries['addr:postcode'].value_counts().index[0])]['urban']
+            
+            geometries = geometries.to_crs("EPSG:3857") #converting lat lon to m^2
+            geometries['building:levels'] = geometries['building:levels'].fillna(0).astype('int') #removing nans
+            geometries['addr:postcode'] = geometries['addr:postcode'].str[:5]
+
+            kw = 0
+            sunroof = pd.read_csv('project-sunroof-postal_code.csv').set_index('zip')
+            L = geometries['addr:postcode'].value_counts()
+            for i in range(len(L)):
+                zip_code, count = int(L.keys()[i]), L[i]
+                area = sunroof.loc[zip_code]
+                kw += area['kw_total'] * count / area['qualified']
+            rooftop_kwh = kw * 8760 #kw to kwh/yr
 
             btu_per_year = 0
-            geometries = geometries.to_crs("EPSG:3857") #converting lat lon to square meters
-            geometries['building:levels'] = geometries['building:levels'].fillna(0).astype('int') #removing nans
             for i, row in geometries.iterrows():
                 zip = row['addr:postcode']
                 if pd.isna(zip):
                     if default: per_foot = 39200
                     else: per_foot = 35500
                 else:
-                    zip = int(zip[:5])
-                    if zip_density.loc[zip]['urban']:
-                        per_foot = 39200
-                    else: 
-                        per_foot = 35500
+                    if zip_density.loc[zip]['urban']: per_foot = 39200
+                    else: per_foot = 35500
 
                 energy = per_foot * row['geometry'].area * 10.7639 #m^2 to ft^2
 
@@ -86,21 +91,25 @@ def mapRoutes(app):
             watts = btu_per_hour * 3.41214e+3
             kilowatts = watts / 1000
             kwh_per_year = kilowatts * 8760
-            print(kwh_per_year)
-            return kwh_per_year
+            kwh_per_year
+
+            return (kwh_per_year, rooftop_kwh, len(geometries))
 
 
-        def get_map(lat, lon, r):
+        def get_map(lat, lon, r, demand):
             loc = (lat, lon)
-
             roads_df = ox.geometries.geometries_from_point(loc, tags= {"highway": True}, dist=r)
             m = folium.Map(list(loc), zoom_start=16)
 
+            folium.Circle(location=loc, radius=r, color="#184e77", opacity=0.7, fill=True, fillOpacity=0.15).add_to(m)
+
             geometries = ox.geometries.geometries_from_point(loc, tags= {"landuse": ["landfill", "greenfield", "brownfield"], "building": "parking"}, dist=r)
+            if "landuse" not in geometries.columns:
+                return m._repr_html_(), 0, pd.Series()
             roads = []
             for shape in geometries[geometries["landuse"] != "parking"]['geometry']:
                 road = roads_df.loc[shape.contains(roads_df["geometry"])]
-            roads.append(road)
+                roads.append(road)
 
             roads = gpd.GeoDataFrame(pd.concat(roads, ignore_index=True))
             roads = roads[roads.geom_type == "LineString"]
@@ -108,23 +117,41 @@ def mapRoutes(app):
             roads['geometry'] = roads['geometry'].buffer(0.0001)
             geometries = geometries.reset_index()
             geometries['solrad'] = geometries.apply(lambda x: solrad(x['geometry'].centroid.y, x['geometry'].centroid.x), axis=1)
-            
-            geometries["categories"] = np.where(geometries["landuse"].isna(), geometries["building"], geometries["landuse"])
 
-            folium.GeoJson(data=geometries['geometry']).add_to(m)
+            folium.GeoJson(data=geometries['geometry'], style_function=lambda _: {'fillOpacity': 0}).add_to(m)
             panels = gpd.overlay(geometries, roads, how='difference')
             panels = panels.explode()
             panels['Area'] = panels['geometry'].to_crs("EPSG:3857").area
-            panels = panels[panels['Area'] > max(panels['Area'].quantile(0.25), 250)]
+            panels = panels[panels['Area'] > 250]
 
-            panels['Production'] = panels['solrad'] * 365 * panels['Area']
+            panels['Production'] = panels['solrad'] * 365 * panels['Area'] * 0.2
+            for _, panel in panels.iterrows():
+                if list(panel['geometry'].interiors) != []: continue
+                L = list(panel['geometry'].exterior.coords)
+                
+                popup = f"""<div style="font-size: 11pt; width: 280px; border-radius: 10px; background-color: rgba(255, 255, 255, 0.5);"><strong><u>Projections:</u></strong>
+                    <br> <strong>{round(panel['Area'], 2)} m<sup>2</sup></strong> of space available for solar panels
+                    <br> <strong>{round(panel['Production'], 2)} kWh</strong> of energy could be produced annually"""
+                if panel['Production'] * 100 / demand > 1: popup += f"<br> <strong>{round(panel['Production'] * 100 / demand, 2)}%</strong> of local demand could be met"
+                popup += "</div>"
+                
+                folium.vector_layers.Polygon(
+                    locations=[(x, y) for (y, x) in L],
+                    popup=popup,
+                    color="#76c893",
+                    fill=True,
+                    fillColor='#76c893',
+                    opacity=0,
+                    fillOpacity=0.75).add_to(m)
 
-            folium.GeoJson(data=panels, popup=folium.features.GeoJsonPopup(['Area', 'Production']), style_function=lambda x: {'fillColor': '#228B22', 'color': '#228B22'}).add_to(m)
-            
-            return (m.__repr__.html(), panels["Production"].sum(), geometries["categories"].value_counts())
+            folium.TileLayer(tiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                attr = 'Esri', name = 'Esri Satellite', overlay = False, control = True).add_to(m)
+            #html, total production, categories
+            return (m._repr_html_(), panels["Production"].sum(), geometries["categories"].value_counts())
 
-        demand = get_demand(lat, lon, r)
-        map_html, production, categories = get_map(lat, lon, r)
-        data = {"map_html": map_html, "demand": demand, "production": production, "categories": categories.to_json()}
+        demand, existing_production, number_buildings = get_demand(lat, lon, r)
+        map_html, potential_production, categories = get_map(lat, lon, r)
+        data = {"map_html": map_html, "demand": demand, "existing_production": existing_production, 
+                "number_buildings": number_buildings, "potential_production": potential_production, "categories": categories.to_json()}
         json_data = jsonify(**data)
         return json_data
