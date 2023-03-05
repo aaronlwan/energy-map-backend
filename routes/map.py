@@ -101,7 +101,7 @@ def mapRoutes(app):
             loc = (lat, lon)
             roads_df = ox.geometries.geometries_from_point(loc, tags= {"highway": True}, dist=r)
             m = folium.Map(list(loc), zoom_start=16)
-            folium.Circle(location=loc, radius=r, color="#184e77", opacity=0.7, fill=True, fillOpacity=0.15).add_to(m)
+            folium.Circle(location=loc, radius=r, color="#fe6700", opacity=0.7, fill=True, fillOpacity=0.15).add_to(m)
             geometries = ox.geometries.geometries_from_point(loc, tags= {"landuse": ["landfill", "greenfield", "brownfield"], "building": "parking"}, dist=r)
             if "landuse" not in geometries.columns:
                 return m._repr_html_(), 0, pd.Series()
@@ -137,9 +137,9 @@ def mapRoutes(app):
                 folium.vector_layers.Polygon(
                     locations=[(x, y) for (y, x) in L],
                     popup=popup,
-                    color="#76c893",
+                    color="#FE6700",
                     fill=True,
-                    fillColor='#76c893',
+                    fillColor='#FE6700',
                     opacity=0,
                     fillOpacity=0.75).add_to(m)
                 
@@ -173,7 +173,7 @@ def mapRoutes(app):
         distance_df.sort_values(["Area", "power_dist"], ascending=[False, True])
         for i in range(int(len(distance_df) * 0.10)):
             best_lat, best_lon = distance_df.iloc[i]["centroid"].y, distance_df.iloc[i]["centroid"].x
-            folium.Marker( location=[best_lat, best_lon], fill_color='#43d9de', radius=8).add_to(map)
+            folium.Marker( location=[best_lat, best_lon], fill_color='#FE6700', radius=8).add_to(map)
         data = {"map_html": map._repr_html_(), "demand": demand, "existing_installs": existing_installs, "count_qualified": count_qualified, "total_kwh_potential": total_kwh_potential, "median_kwh_potential": median_kwh_potential,
                 "number_buildings": number_buildings, "potential_production": potential_production, "number_sites": number_sites}
         json_data = jsonify(**data)
