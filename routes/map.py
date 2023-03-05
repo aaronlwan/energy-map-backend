@@ -19,17 +19,12 @@ def mapRoutes(app):
         params = {'q': city + ',' + stateCode + ',' + country, 'appid':'fc5358fa54599e6cf8e27577d2fa0df8'}
         response = requests.get(url='http://api.openweathermap.org/geo/1.0/direct', params=params)
         data = response.json()
-        print(data)
         lat, lon = data[0]["lat"], data[0]["lon"]
         result = jsonify({"lat": lat, "lon": lon})
         return result
     @app.route('/latlontomap')
     @cross_origin()
     def LatLontoMap():
-        print("CALLED!")
-        print()
-        print()
-        print()
         args = request.args
         lat = float(args.get("lat"))
         lon = float(args.get("lon"))
@@ -52,8 +47,6 @@ def mapRoutes(app):
         def get_demand(lat, lon, r):
             loc = (lat, lon)
             geometries = ox.geometries.geometries_from_point(loc, tags={"building": True}, dist=r)
-            print("BULDING")
-            print(geometries)
             if "addr:postcode" not in geometries.columns: return (0, 0, 0)
 
             #map zip codes to pop density
@@ -111,12 +104,8 @@ def mapRoutes(app):
             loc = (lat, lon)
             roads_df = ox.geometries.geometries_from_point(loc, tags= {"highway": True}, dist=r)
             m = folium.Map(list(loc), zoom_start=16)
-
             folium.Circle(location=loc, radius=r, color="#184e77", opacity=0.7, fill=True, fillOpacity=0.15).add_to(m)
-
             geometries = ox.geometries.geometries_from_point(loc, tags= {"landuse": ["landfill", "greenfield", "brownfield"], "building": "parking"}, dist=r)
-            print("SPOTS")
-            print(geometries)
             if "landuse" not in geometries.columns:
                 return m._repr_html_(), 0, pd.Series()
             roads = []
@@ -168,9 +157,7 @@ def mapRoutes(app):
         def calc_power_dist(df, lat, lon, r):
             loc = (lat, lon)
             power = ox.geometries.geometries_from_point(loc, tags={"power": ["substation", "tower"]}, dist=r)
-            print(power["geometry"])
             power["centroid"] = power["geometry"].centroid
-            print(df["geometry"])
             df["centroid"] = df["geometry"].centroid
             df["power_dist"] = 0
             for i, row in df.iterrows():
@@ -195,5 +182,4 @@ def mapRoutes(app):
         data = {"map_html": map._repr_html_(), "demand": demand, "existing_production": existing_production, 
                 "number_buildings": number_buildings, "potential_production": potential_production, "number_sites": number_sites}
         json_data = jsonify(**data)
-        print(json_data)
         return json_data
