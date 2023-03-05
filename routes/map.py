@@ -83,6 +83,7 @@ def mapRoutes(app):
                 energy = per_foot * row['geometry'].area * 10.7639 #m^2 to ft^2
 
                 stories = row['building:levels']
+                stories = int(max([v for v in stories.split() if v.isdigit()]))
                 if stories > 5: energy *= 201 / 114
                 elif stories > 1: energy *= 1.024 ** stories
                 btu_per_year += energy
