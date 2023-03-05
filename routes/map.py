@@ -104,7 +104,7 @@ def mapRoutes(app):
             folium.Circle(location=loc, radius=r, color="red", opacity=0.7, fill=True, fillOpacity=0.15).add_to(m)
             geometries = ox.geometries.geometries_from_point(loc, tags= {"landuse": ["landfill", "greenfield", "brownfield"], "building": "parking"}, dist=r)
             if "landuse" not in geometries.columns:
-                return m._repr_html_(), 0, pd.Series()
+                return m._repr_html_(), 0, pd.Series(), None
             roads = []
             for shape in geometries[geometries["landuse"] != "parking"]['geometry']:
                 road = roads_df.loc[shape.contains(roads_df["geometry"])]
