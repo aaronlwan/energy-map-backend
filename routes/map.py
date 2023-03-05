@@ -77,7 +77,7 @@ def mapRoutes(app):
                     if default: per_foot = 39200
                     else: per_foot = 35500
                 else:
-                    if zip_density.loc[zip]['urban']: per_foot = 39200
+                    if zip_density.loc[int(zip)]['urban']: per_foot = 39200
                     else: per_foot = 35500
 
                 energy = per_foot * row['geometry'].area * 10.7639 #m^2 to ft^2
@@ -150,7 +150,7 @@ def mapRoutes(app):
             return (m._repr_html_(), panels["Production"].sum(), geometries["categories"].value_counts())
 
         demand, existing_production, number_buildings = get_demand(lat, lon, r)
-        map_html, potential_production, categories = get_map(lat, lon, r)
+        map_html, potential_production, categories = get_map(lat, lon, r, demand)
         data = {"map_html": map_html, "demand": demand, "existing_production": existing_production, 
                 "number_buildings": number_buildings, "potential_production": potential_production, "categories": categories.to_json()}
         json_data = jsonify(**data)
