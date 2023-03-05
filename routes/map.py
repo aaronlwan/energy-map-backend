@@ -19,17 +19,12 @@ def mapRoutes(app):
         params = {'q': city + ',' + stateCode + ',' + country, 'appid':'fc5358fa54599e6cf8e27577d2fa0df8'}
         response = requests.get(url='http://api.openweathermap.org/geo/1.0/direct', params=params)
         data = response.json()
-        print(data)
         lat, lon = data[0]["lat"], data[0]["lon"]
         result = jsonify({"lat": lat, "lon": lon})
         return result
     @app.route('/latlontomap')
     @cross_origin()
     def LatLontoMap():
-        print("CALLED!")
-        print()
-        print()
-        print()
         args = request.args
         lat = float(args.get("lat"))
         lon = float(args.get("lon"))
@@ -54,8 +49,6 @@ def mapRoutes(app):
         def get_demand(lat, lon, r):
             loc = (lat, lon)
             geometries = ox.geometries.geometries_from_point(loc, tags={"building": True}, dist=r)
-            print("BULDING")
-            print(geometries)
             if "addr:postcode" not in geometries.columns: return (0, 0, 0)
 
             #map zip codes to pop density
@@ -108,12 +101,8 @@ def mapRoutes(app):
             loc = (lat, lon)
             roads_df = ox.geometries.geometries_from_point(loc, tags= {"highway": True}, dist=r)
             m = folium.Map(list(loc), zoom_start=16)
-
             folium.Circle(location=loc, radius=r, color="#184e77", opacity=0.7, fill=True, fillOpacity=0.15).add_to(m)
-
             geometries = ox.geometries.geometries_from_point(loc, tags= {"landuse": ["landfill", "greenfield", "brownfield"], "building": "parking"}, dist=r)
-            print("SPOTS")
-            print(geometries)
             if "landuse" not in geometries.columns:
                 return m._repr_html_(), 0, pd.Series()
             roads = []
@@ -159,14 +148,13 @@ def mapRoutes(app):
                 attr = 'Esri', name = 'Esri Satellite', overlay = False, control = True).add_to(m)
             #html, total production, categories
             #return (m._repr_html_(), panels["Production"].sum(), geometries["building"].value_counts(), geometries)
-            return (m, panels["Production"].sum(), geometries["building"].value_counts(), geometries)
+            #return (m, panels["Production"].sum(), geometries["building"].value_counts(), geometries)
+            return (m, panels["Production"].sum(), len(geometries["geometry"]), geometries)
         
         def calc_power_dist(df, lat, lon, r):
             loc = (lat, lon)
             power = ox.geometries.geometries_from_point(loc, tags={"power": ["substation", "tower"]}, dist=r)
-            print(power["geometry"])
             power["centroid"] = power["geometry"].centroid
-            print(df["geometry"])
             df["centroid"] = df["geometry"].centroid
             df["power_dist"] = 0
             for i, row in df.iterrows():
@@ -179,7 +167,7 @@ def mapRoutes(app):
             return df
 
         demand, count_qualified, total_kwh_potential, existing_installs, median_kwh_potential, number_buildings = get_demand(lat, lon, r)
-        map, potential_production, categories, df = get_map(lat, lon, r, demand)
+        map, potential_production, number_sites, df = get_map(lat, lon, r, demand)
         distance_df = calc_power_dist(df, lat, lon, r)
         distance_df['Area'] = distance_df['geometry'].to_crs("EPSG:3857").area
         distance_df.sort_values(["Area", "power_dist"], ascending=[False, True])
@@ -187,7 +175,6 @@ def mapRoutes(app):
             best_lat, best_lon = distance_df.iloc[i]["centroid"].y, distance_df.iloc[i]["centroid"].x
             folium.Marker( location=[best_lat, best_lon], fill_color='#43d9de', radius=8).add_to(map)
         data = {"map_html": map._repr_html_(), "demand": demand, "existing_installs": existing_installs, "count_qualified": count_qualified, "total_kwh_potential": total_kwh_potential, "median_kwh_potential": median_kwh_potential,
-                "number_buildings": number_buildings, "potential_production": potential_production, "categories": categories.to_json()}
+                "number_buildings": number_buildings, "potential_production": potential_production, "number_sites": number_sites}
         json_data = jsonify(**data)
-        print(json_data)
         return json_data
