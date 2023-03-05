@@ -6,6 +6,7 @@ from flask import request, jsonify
 import requests
 import pandas as pd
 from flask_cors import CORS, cross_origin
+import numpy as np
 
 def mapRoutes(app):
     @app.route('/citytolatlon')
@@ -49,7 +50,7 @@ def mapRoutes(app):
             #m = folium.Map(list(loc), zoom_start=17)
             geometries = ox.geometries.geometries_from_point(loc, tags={"building": True}, dist=r)
             #folium.GeoJson(data=geometries['geometry']).add_to(m)
-            if len(geometries.columns) <= 1:
+            if "addr:postcode" not in geometries.columns:
                 return 0
             #making mapping of zip codes to population density
             zip_density = pd.read_csv('zip_population.csv').set_index('ZIP')
@@ -91,15 +92,11 @@ def mapRoutes(app):
 
         def get_map(lat, lon, r):
             loc = (lat, lon)
-            print(loc)
+
             roads_df = ox.geometries.geometries_from_point(loc, tags= {"highway": True}, dist=r)
             m = folium.Map(list(loc), zoom_start=16)
 
             geometries = ox.geometries.geometries_from_point(loc, tags= {"landuse": ["landfill", "greenfield", "brownfield"], "building": "parking"}, dist=r)
-            print(geometries.columns)
-            print(geometries)
-            if len(geometries.columns) <= 1:
-                return m._repr_html_(), 0
             roads = []
             for shape in geometries[geometries["landuse"] != "parking"]['geometry']:
                 road = roads_df.loc[shape.contains(roads_df["geometry"])]
@@ -111,6 +108,8 @@ def mapRoutes(app):
             roads['geometry'] = roads['geometry'].buffer(0.0001)
             geometries = geometries.reset_index()
             geometries['solrad'] = geometries.apply(lambda x: solrad(x['geometry'].centroid.y, x['geometry'].centroid.x), axis=1)
+            
+            geometries["categories"] = np.where(geometries["landuse"].isna(), geometries["building"], geometries["landuse"])
 
             folium.GeoJson(data=geometries['geometry']).add_to(m)
             panels = gpd.overlay(geometries, roads, how='difference')
@@ -118,14 +117,14 @@ def mapRoutes(app):
             panels['Area'] = panels['geometry'].to_crs("EPSG:3857").area
             panels = panels[panels['Area'] > max(panels['Area'].quantile(0.25), 250)]
 
-            panels['Production'] = panels['solrad'] * 365 * panels['Area'] * 0.2
+            panels['Production'] = panels['solrad'] * 365 * panels['Area']
 
             folium.GeoJson(data=panels, popup=folium.features.GeoJsonPopup(['Area', 'Production']), style_function=lambda x: {'fillColor': '#228B22', 'color': '#228B22'}).add_to(m)
             
-            return (m._repr_html_(), panels["Production"].sum())
+            return (m.__repr__.html(), panels["Production"].sum(), geometries["categories"].value_counts())
 
         demand = get_demand(lat, lon, r)
-        map_html, production = get_map(lat, lon, r)
-        data = {"map_html": map_html, "demand": demand, "production": production}
+        map_html, production, categories = get_map(lat, lon, r)
+        data = {"map_html": map_html, "demand": demand, "production": production, "categories": categories.to_json()}
         json_data = jsonify(**data)
         return json_data
