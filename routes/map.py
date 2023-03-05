@@ -16,15 +16,20 @@ def mapRoutes(app):
         city = args.get("city")
         stateCode = args.get("stateCode")
         country = args.get("country")
-        params = {'q': city + ',' + stateCode + ',' + country, 'appid':'d7ecdfafc6f8d7054f83336651abe8fc'}
+        params = {'q': city + ',' + stateCode + ',' + country, 'appid':'fc5358fa54599e6cf8e27577d2fa0df8'}
         response = requests.get(url='http://api.openweathermap.org/geo/1.0/direct', params=params)
         data = response.json()
+        print(data)
         lat, lon = data[0]["lat"], data[0]["lon"]
         result = jsonify({"lat": lat, "lon": lon})
         return result
     @app.route('/latlontomap')
     @cross_origin()
     def LatLontoMap():
+        print("CALLED!")
+        print()
+        print()
+        print()
         args = request.args
         lat = float(args.get("lat"))
         lon = float(args.get("lon"))
@@ -47,6 +52,8 @@ def mapRoutes(app):
         def get_demand(lat, lon, r):
             loc = (lat, lon)
             geometries = ox.geometries.geometries_from_point(loc, tags={"building": True}, dist=r)
+            print("BULDING")
+            print(geometries)
             if "addr:postcode" not in geometries.columns: return (0, 0, 0)
 
             #map zip codes to pop density
@@ -58,16 +65,19 @@ def mapRoutes(app):
             default = zip_density.loc[int(geometries['addr:postcode'].value_counts().index[0])]['urban']
             
             geometries = geometries.to_crs("EPSG:3857") #converting lat lon to m^2
-            geometries['building:levels'] = geometries['building:levels'].fillna(0).astype('int') #removing nans
-            geometries['addr:postcode'] = geometries['addr:postcode'].str[:5]
-
+            #geometries['building:levels'] = geometries['building:levels'].fillna(0).astype('int') #removing nans
+            geometries["building:levels"] = pd.to_numeric(geometries["building:levels"], errors="coerce").dropna().astype("int")
+            geometries['addr:postcode'] = pd.to_numeric(geometries['addr:postcode'].str[:5], errors="coerce").dropna().astype("int")
             kw = 0
             sunroof = pd.read_csv('project-sunroof-postal_code.csv').set_index('zip')
             L = geometries['addr:postcode'].value_counts()
             for i in range(len(L)):
-                zip_code, count = int(L.keys()[i]), L[i]
-                area = sunroof.loc[zip_code]
-                kw += area['kw_total'] * count / area['qualified']
+                zip_code, count = int(L.keys()[i]), L.values[i]
+                try:
+                    area = sunroof.loc[zip_code]
+                    kw += area['kw_total'] * count / area['qualified']
+                except:
+                    pass
             rooftop_kwh = kw * 8760 #kw to kwh/yr
 
             btu_per_year = 0
@@ -83,7 +93,7 @@ def mapRoutes(app):
                 energy = per_foot * row['geometry'].area * 10.7639 #m^2 to ft^2
 
                 stories = row['building:levels']
-                stories = int(max([v for v in stories.split() if v.isdigit()]))
+                #stories = int(max([v for v in stories.split() if v.isdigit()]))
                 if stories > 5: energy *= 201 / 114
                 elif stories > 1: energy *= 1.024 ** stories
                 btu_per_year += energy
@@ -105,6 +115,8 @@ def mapRoutes(app):
             folium.Circle(location=loc, radius=r, color="#184e77", opacity=0.7, fill=True, fillOpacity=0.15).add_to(m)
 
             geometries = ox.geometries.geometries_from_point(loc, tags= {"landuse": ["landfill", "greenfield", "brownfield"], "building": "parking"}, dist=r)
+            print("SPOTS")
+            print(geometries)
             if "landuse" not in geometries.columns:
                 return m._repr_html_(), 0, pd.Series()
             roads = []
@@ -144,15 +156,41 @@ def mapRoutes(app):
                     fillColor='#76c893',
                     opacity=0,
                     fillOpacity=0.75).add_to(m)
+                
 
             folium.TileLayer(tiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
                 attr = 'Esri', name = 'Esri Satellite', overlay = False, control = True).add_to(m)
             #html, total production, categories
-            return (m._repr_html_(), panels["Production"].sum(), geometries["categories"].value_counts())
+            #return (m._repr_html_(), panels["Production"].sum(), geometries["building"].value_counts(), geometries)
+            return (m, panels["Production"].sum(), geometries["building"].value_counts(), geometries)
+        
+        def calc_power_dist(df, lat, lon, r):
+            loc = (lat, lon)
+            power = ox.geometries.geometries_from_point(loc, tags={"power": ["substation", "tower"]}, dist=r)
+            print(power["geometry"])
+            power["centroid"] = power["geometry"].centroid
+            print(df["geometry"])
+            df["centroid"] = df["geometry"].centroid
+            df["power_dist"] = 0
+            for i, row in df.iterrows():
+                best = float("inf")
+                for _, row2 in power.iterrows():
+                    curr = row["centroid"].distance(row2.centroid)
+                    if curr < best:
+                        best = curr
+                df.loc[i, "power_dist"] = best
+            return df
 
         demand, existing_production, number_buildings = get_demand(lat, lon, r)
-        map_html, potential_production, categories = get_map(lat, lon, r, demand)
-        data = {"map_html": map_html, "demand": demand, "existing_production": existing_production, 
+        map, potential_production, categories, df = get_map(lat, lon, r, demand)
+        distance_df = calc_power_dist(df, lat, lon, r)
+        distance_df['Area'] = distance_df['geometry'].to_crs("EPSG:3857").area
+        distance_df.sort_values(["Area", "power_dist"], ascending=[False, True])
+        for i in range(int(len(distance_df) * 0.10)):
+            best_lat, best_lon = distance_df.iloc[i]["centroid"].y, distance_df.iloc[i]["centroid"].x
+            folium.Marker( location=[best_lat, best_lon], fill_color='#43d9de', radius=8).add_to(map)
+        data = {"map_html": map._repr_html_(), "demand": demand, "existing_production": existing_production, 
                 "number_buildings": number_buildings, "potential_production": potential_production, "categories": categories.to_json()}
         json_data = jsonify(**data)
+        print(json_data)
         return json_data
