@@ -137,9 +137,9 @@ def mapRoutes(app):
                 folium.vector_layers.Polygon(
                     locations=[(x, y) for (y, x) in L],
                     popup=popup,
-                    color="#FE6700",
+                    color="#fe6700",
                     fill=True,
-                    fillColor='#FE6700',
+                    fillColor='#fe6700',
                     opacity=0,
                     fillOpacity=0.75).add_to(m)
                 
@@ -173,7 +173,7 @@ def mapRoutes(app):
         distance_df.sort_values(["Area", "power_dist"], ascending=[False, True])
         for i in range(int(len(distance_df) * 0.10)):
             best_lat, best_lon = distance_df.iloc[i]["centroid"].y, distance_df.iloc[i]["centroid"].x
-            folium.Marker( location=[best_lat, best_lon], fill_color='#FE6700', radius=8).add_to(map)
+            folium.Marker(location=[best_lat, best_lon], fill_color='#fe6700', radius=8).add_to(map)
         data = {"map_html": map._repr_html_(), "demand": demand, "existing_installs": existing_installs, "count_qualified": count_qualified, "total_kwh_potential": total_kwh_potential, "median_kwh_potential": median_kwh_potential,
                 "number_buildings": number_buildings, "potential_production": potential_production, "number_sites": number_sites}
         json_data = jsonify(**data)
